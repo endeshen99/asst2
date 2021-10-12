@@ -125,6 +125,9 @@ void TaskSystemParallelThreadPoolSpinning::worker() {
         cur_task++;
         task_lock.unlock();
         runnable_curr->runTask(task_num, num_total_tasks_curr);
+        task_finished_lock.lock();
+        finished_tasks++;
+        task_finished_lock.unlock();
     }
 }
 
@@ -132,6 +135,7 @@ TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int n
                                                                                              thread_vec(num_threads),
                                                                                              num_total_tasks_curr(0),
                                                                                              cur_task(0),
+                                                                                             finished_tasks(0),
                                                                                              finished(false){
     //
     // TODO: CS149 student implementations may decide to perform setup
@@ -169,9 +173,10 @@ void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_tota
     task_lock.unlock();
     while(true) {
         task_lock.lock();
-        if (cur_task == num_total_tasks_curr) {
+        if (finished_tasks == num_total_tasks_curr) {
             num_total_tasks_curr = 0;
             cur_task = 0;
+            finished_tasks = 0;
             task_lock.unlock();
             break;
         }

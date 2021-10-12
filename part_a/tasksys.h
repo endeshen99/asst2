@@ -60,11 +60,13 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
                                 const std::vector<TaskID>& deps);
         void sync();
         std::mutex task_lock;
+        std::mutex task_finished_lock;
     private:
         void worker();
         IRunnable* runnable_curr;
         int num_total_tasks_curr;
         int cur_task;
+        int finished_tasks;
         bool finished;
 };
 
