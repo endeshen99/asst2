@@ -170,6 +170,7 @@ void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_tota
         // cout << "main" << cur_task << "\n" << std::flush;
         if (cur_task == num_total_tasks_curr) {
             num_total_tasks_curr = 0;
+            cur_task = 0;
             task_lock.unlock();
             break;
         }
