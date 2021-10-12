@@ -90,6 +90,7 @@ void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
     for (int i = 0; i < thread_vec.size(); i++) {
         thread_vec[i].join();
     }
+    cur_task = 0;
 }
 
 TaskID TaskSystemParallelSpawn::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -119,7 +120,7 @@ void TaskSystemParallelThreadPoolSpinning::worker() {
             task_lock.unlock();
             continue;
         }
-        // cout << "current task: " << cur_task << "\n" << std::flush;
+        //cout << "current task: " << cur_task << "\n" << std::flush;
         int task_num = cur_task;
         cur_task++;
         task_lock.unlock();
@@ -147,6 +148,7 @@ TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int n
 
 TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
     finished = true;
+    //cout << "ending" << endl;
     for (int i = 0; i < thread_vec.size(); i++) {
         thread_vec[i].join();
     }
@@ -160,14 +162,13 @@ void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_tota
     // method in Part A.  The implementation provided below runs all
     // tasks sequentially on the calling thread.
     //
-    // cout << "numer of total tasks: " << num_total_tasks << "\n" << std::flush;
+    //cout << "numer of total tasks: " << num_total_tasks << "\n" << std::flush;
     task_lock.lock();
     runnable_curr = runnable;
     num_total_tasks_curr = num_total_tasks;
     task_lock.unlock();
     while(true) {
         task_lock.lock();
-        // cout << "main" << cur_task << "\n" << std::flush;
         if (cur_task == num_total_tasks_curr) {
             num_total_tasks_curr = 0;
             cur_task = 0;
