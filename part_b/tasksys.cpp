@@ -126,7 +126,11 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
     return "Parallel + Thread Pool + Sleep";
 }
 
-TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads) {
+TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads):
+                                                                            ITaskSystem(num_threads),
+                                                                            thread_vec(num_threads),
+                                                                            task_count(0),
+                                                                            finished_task_count(0) {
     //
     // TODO: CS149 student implementations may decide to perform setup
     // operations (such as thread pool construction) here.
@@ -135,13 +139,28 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
     //
 }
 
-TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
-    //
-    // TODO: CS149 student implementations may decide to perform cleanup
-    // operations (such as thread pool shutdown construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
+void TaskSystemParallelThreadPoolSpinning::worker() {
+
+    // TODO: adapt sleeping threads, ask workers to grab work
+    // from the processing_queue, update processing_progress,
+    // and invoke task_finished subroutine
+
+    // while (true) {
+    //     if (finished) break;
+    //     task_lock.lock();
+    //     if (num_total_tasks_curr == 0 || cur_task == num_total_tasks_curr) {
+    //         task_lock.unlock();
+    //         continue;
+    //     }
+    //     //cout << "current task: " << cur_task << "\n" << std::flush;
+    //     int task_num = cur_task;
+    //     cur_task++;
+    //     task_lock.unlock();
+    //     runnable_curr->runTask(task_num, num_total_tasks_curr);
+    //     task_finished_lock.lock();
+    //     finished_tasks++;
+    //     task_finished_lock.unlock();
+    // }
 }
 
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_total_tasks) {
@@ -156,6 +175,22 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
     for (int i = 0; i < num_total_tasks; i++) {
         runnable->runTask(i, num_total_tasks);
     }
+}
+
+void TaskSystemParallelThreadPoolSleeping::task_finished(TaskID tid) {
+    // when a task is finished, no tasks are dependent on it anymore
+    // delete its record from deps_map, and delete its value from deps_map.values()
+    // delete its record from deps_map_inverse
+    // TODO
+
+    finished_task_count++;
+
+    // deque this finished task
+    // queue any tasks that have zero dependencies into the processing_queue, and
+    // update corresponding processing_progress
+    // TODO
+
+
 }
 
 TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -195,6 +230,11 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
         }
     }
     deps_map[curr_task_id] = existing_deps;
+
+    // if the task has no dependencies, queue it directly to the processing_queue, and
+    // update corresponding processing_progress
+    // TODO
+
     dep_lock.unlock();
     return curr_task_id;
 }

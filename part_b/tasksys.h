@@ -62,6 +62,21 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
  * optimized implementation of a parallel task execution engine that uses
  * a thread pool. See definition of ITaskSystem in
  * itasksys.h for documentation of the ITaskSystem interface.
+ * 
+ * 
+ * deps_map looks like:
+ * 0 : []
+ * 1 : [0]
+ * 2 : [0, 1]
+ * 3 : [2]
+ * 4 : [1，3]
+ * 
+ * coresponding deps_map_inverse looks like:
+ * 0 : [1, 2]
+ * 1 : [2, 4]
+ * 2 : [3]
+ * 3 : [4]
+ * 
  */
 class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
     public:
@@ -81,6 +96,9 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         std::mutex dep_lock;
         int task_count;
         int finished_task_count;
+        std::vector<std::thread> thread_vec;
+        void task_finished(TaskID tid);
+        void worker();
 };
 
 #endif
