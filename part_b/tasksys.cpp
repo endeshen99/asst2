@@ -166,11 +166,37 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
     // TODO: CS149 students will implement this method in Part B.
     //
 
-    for (int i = 0; i < num_total_tasks; i++) {
-        runnable->runTask(i, num_total_tasks);
-    }
 
-    return 0;
+    task_count++;
+    TaskID curr_task_id = task_count;
+
+    id_to_task[curr_task_id] = {runnable, num_total_tasks};
+
+    // TODO: want to append an empty vector if there's no deps. verify the behavior.
+    std::vector<TaskID> existing_deps;
+    dep_lock.lock();
+    for (const auto& dep_task_id: deps) {
+        // filter tasks in the dependency list that have already finished
+        if (deps_map.count(dep_task_id)) {
+            existing_deps.push_back(dep_task_id);
+
+            // tell the tasks in the dependency list: this task depends on you.
+            // so that when you are finished, you can notify this task so.
+            //
+            // Two situations:
+            //   1. append to an existing vector 
+            //   2. create a new vector with one element
+            if (deps_map_inverse.count(dep_task_id)) {
+                deps_map_inverse[dep_task_id].push_back(curr_task_id);
+            } else {       // TODO: want to create a one-element vector here, verify
+                std::vector<TaskID> deps_inverse = {curr_task_id};
+                deps_map_inverse[dep_task_id] = deps_inverse;
+            }
+        }
+    }
+    deps_map[curr_task_id] = existing_deps;
+    dep_lock.unlock();
+    return curr_task_id;
 }
 
 void TaskSystemParallelThreadPoolSleeping::sync() {
