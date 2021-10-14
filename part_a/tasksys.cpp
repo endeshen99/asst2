@@ -204,25 +204,14 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
 }
 
 void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
-    unique_lock<mutex> ulock(task_lock);
-    cout << "locked" << endl;
-    wakeThread[workerId].wait(ulock);
-    cout << workerId << "wakes" << endl;
+    //unique_lock<mutex> ulock(task_lock);
+    task_lock.lock();
+    wakeThread[workerId].wait(task_lock);
     while (true) {
-        cout << workerId << " is before lock" << endl;
-        //task_lock.lock();
-        cout << "worker locked" << endl;
-        cout << workerId << " is starting loop" << endl;
         if (cur_task == num_total_tasks) {
-            cout << workerId << " is in if" << endl;
-            //idle_lock.lock();
             idle[workerId] = true;
-            //idle_lock.unlock();
             cout << workerId << " is sleeping" << endl;
-            //task_lock.lock();
-            task_lock.lock();
             wakeThread[workerId].wait(task_lock);
-            cout << workerId << " is waking" << endl;
             if (deconstruct) {
                 cout << workerId << " is deconstructing" << endl;
                 break;
@@ -234,7 +223,7 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
         cout << workerId << " is running job " << my_task << endl;
         int my_total_tasks = num_total_tasks;
         cur_task++;
-        //task_lock.unlock();
+        task_lock.unlock();
 
         runnable->runTask(my_task, my_total_tasks);
 
@@ -271,7 +260,6 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
 
 }
 bool TaskSystemParallelThreadPoolSleeping::allWorkersIdle() {
-    cout << "checking idle" << endl;
     for (bool i : idle) {
         if (!i) {
             return false;
@@ -282,35 +270,24 @@ bool TaskSystemParallelThreadPoolSleeping::allWorkersIdle() {
 
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* run, int total_tasks) {
 
-    cout << "called with " << total_tasks << endl;
-    //task_lock.lock();
-    cout << "locked" << endl;
+    task_lock.lock();
     cout << "starting with " << total_tasks << endl;
     cur_task = 0;
     num_total_tasks = total_tasks;
     runnable = run;
-    //idle_lock.lock();
     for (int i =0; i < idle.size(); i++) {
         idle[i] = false;
     }
-    //idle_lock.unlock();
-    cout << "main thread unlocking" << endl;
-    //task_lock.unlock();
+    task_lock.unlock();
+    
     for (auto& cv : wakeThread) {
-        cout << "notify all wke up" << endl;
         cv.notify_all();
     }
-    cout << "run before lock" << endl;
-    //task_lock.unlock();
-    if (!allWorkersIdle()) {
-        cout << "locked" << endl;
-        task_lock.lock();
-        cout << "give lock back" << endl;
+    task_lock.lock();
+    while (!allWorkersIdle()) {
         checkWorkLeft.wait(task_lock);
-    } else {
-        // UNCOMMENT
-        //task_lock.unlock();
     }
+    task_lock.unlock();
     cout << " run done" << endl;
 }
 
