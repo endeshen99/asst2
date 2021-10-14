@@ -6,6 +6,7 @@
 #include <queue>
 #include <array>
 #include <mutex>
+#include <thread>
 
 /*
  * TaskSystemSerial: This class is the student's implementation of a

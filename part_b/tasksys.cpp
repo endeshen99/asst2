@@ -128,9 +128,9 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
 
 TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads):
                                                                             ITaskSystem(num_threads),
-                                                                            thread_vec(num_threads),
                                                                             task_count(0),
-                                                                            finished_task_count(0) {
+                                                                            finished_task_count(0),
+                                                                            thread_vec(num_threads) {
     //
     // TODO: CS149 student implementations may decide to perform setup
     // operations (such as thread pool construction) here.
@@ -139,7 +139,16 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
     //
 }
 
-void TaskSystemParallelThreadPoolSpinning::worker() {
+TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
+    //
+    // TODO: CS149 student implementations may decide to perform cleanup
+    // operations (such as thread pool shutdown construction) here.
+    // Implementations are free to add new class member variables
+    // (requiring changes to tasksys.h).
+    //
+}
+
+void TaskSystemParallelThreadPoolSleeping::worker() {
 
     // TODO: adapt sleeping threads, ask workers to grab work
     // from the processing_queue, update processing_progress,
