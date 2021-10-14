@@ -114,8 +114,11 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 
 void TaskSystemParallelThreadPoolSpinning::worker() {
     while (true) {
-        if (finished) break;
         task_lock.lock();
+        if (finished) {
+            task_lock.unlock();
+            break;
+        }
         if (num_total_tasks_curr == 0 || cur_task == num_total_tasks_curr) {
             task_lock.unlock();
             continue;
@@ -125,9 +128,9 @@ void TaskSystemParallelThreadPoolSpinning::worker() {
         cur_task++;
         task_lock.unlock();
         runnable_curr->runTask(task_num, num_total_tasks_curr);
-        task_finished_lock.lock();
+        task_lock.lock();
         finished_tasks++;
-        task_finished_lock.unlock();
+        task_lock.unlock();
     }
 }
 
@@ -151,7 +154,9 @@ TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int n
 }
 
 TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
+    task_lock.lock();
     finished = true;
+    task_lock.unlock();
     //cout << "ending" << endl;
     for (int i = 0; i < thread_vec.size(); i++) {
         thread_vec[i].join();
