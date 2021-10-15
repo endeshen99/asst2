@@ -150,8 +150,8 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
 
 void TaskSystemParallelThreadPoolSleeping::worker() {
 
-    // TODO: adapt sleeping threads, ask workers to grab work
-    // from the processing_queue, update processing_progress,
+    // TODO: adapt sleeping threads, ask workers to grab work from
+    // and update processing_progress
     // and invoke task_finished subroutine
 
     // while (true) {
@@ -190,16 +190,28 @@ void TaskSystemParallelThreadPoolSleeping::task_finished(TaskID tid) {
     // when a task is finished, no tasks are dependent on it anymore
     // delete its record from deps_map, and delete its value from deps_map.values()
     // delete its record from deps_map_inverse
-    // TODO
+
+    dep_lock.lock();
+    deps_map.erase(tid);
+    for (const TaskID id_to_delete: deps_map_inverse[tid]) {
+        deps_map[id_to_delete].erase(tid);
+
+        // queue any tasks that have zero dependencies as a result into processing_progress
+        if (deps_map[id_to_delete].size() == 0) {
+            processing_progress[id_to_delete] = {id_to_task[id_to_delete].second, 0, 0};
+        }
+    }
+    deps_map_inverse.erase(tid);
 
     finished_task_count++;
-
+    
     // deque this finished task
-    // queue any tasks that have zero dependencies into the processing_queue, and
-    // update corresponding processing_progress
-    // TODO
+    processing_progress.erase(tid);
 
+    // remove the finished task's runnable from our map
+    id_to_task.erase(tid);
 
+    dep_lock.unlock();
 }
 
 TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -210,39 +222,43 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
     // TODO: CS149 students will implement this method in Part B.
     //
 
-
+    dep_lock.lock();
     task_count++;
     TaskID curr_task_id = task_count;
 
     id_to_task[curr_task_id] = {runnable, num_total_tasks};
 
-    // TODO: want to append an empty vector if there's no deps. verify the behavior.
-    std::vector<TaskID> existing_deps;
-    dep_lock.lock();
-    for (const auto& dep_task_id: deps) {
-        // filter tasks in the dependency list that have already finished
-        if (deps_map.count(dep_task_id)) {
-            existing_deps.push_back(dep_task_id);
+    // if the task has no dependencies, queue it to processing_progress
+    if (deps.size() == 0) {
+        processing_progress[curr_task_id] = {num_total_tasks, 0, 0};
 
-            // tell the tasks in the dependency list: this task depends on you.
-            // so that when you are finished, you can notify this task so.
-            //
-            // Two situations:
-            //   1. append to an existing vector 
-            //   2. create a new vector with one element
-            if (deps_map_inverse.count(dep_task_id)) {
-                deps_map_inverse[dep_task_id].push_back(curr_task_id);
-            } else {       // TODO: want to create a one-element vector here, verify
-                std::vector<TaskID> deps_inverse = {curr_task_id};
-                deps_map_inverse[dep_task_id] = deps_inverse;
+    } else {
+
+        // TODO: verify that we append an empty vector if there's no deps
+        std::set<TaskID> existing_deps;
+        
+        for (const auto& dep_task_id: deps) {
+            
+            // filter tasks in the dependency list that have already finished
+            if (deps_map.count(dep_task_id)) {
+                existing_deps.insert(dep_task_id);
+
+                // tell the tasks in the dependency list: this task depends on you.
+                // so that when you are finished, you can notify this task so.
+                //
+                // Two situations:
+                //   1. append to an existing vector 
+                //   2. create a new vector with one element
+                if (deps_map_inverse.count(dep_task_id)) {
+                    deps_map_inverse[dep_task_id].insert(curr_task_id);
+                } else {       // TODO: verify we create a one-element vector here, 
+                    std::set<TaskID> deps_inverse = {curr_task_id};
+                    deps_map_inverse[dep_task_id] = deps_inverse;
+                }
             }
         }
+        deps_map[curr_task_id] = existing_deps;
     }
-    deps_map[curr_task_id] = existing_deps;
-
-    // if the task has no dependencies, queue it directly to the processing_queue, and
-    // update corresponding processing_progress
-    // TODO
 
     dep_lock.unlock();
     return curr_task_id;

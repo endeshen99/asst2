@@ -7,6 +7,7 @@
 #include <array>
 #include <mutex>
 #include <thread>
+#include <set>
 
 /*
  * TaskSystemSerial: This class is the student's implementation of a
@@ -90,10 +91,13 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         void sync();
     private:
         std::map<TaskID, std::pair<IRunnable*, int>> id_to_task;
-        std::map<TaskID, std::vector<TaskID>> deps_map;
-        std::map<TaskID, std::vector<TaskID>> deps_map_inverse;
-        std::queue<TaskID> processing_queue;
-        std::map<TaskID, std::array<int, 2>> processing_progress;
+        std::map<TaskID, std::set<TaskID>> deps_map;
+        std::map<TaskID, std::set<TaskID>> deps_map_inverse;
+        // array<int, 3> of processing_progress have three elements:
+        // 1. total task number
+        // 2. current task number picked up
+        // 3. current task number finished
+        std::map<TaskID, std::array<int, 3>> processing_progress;
         std::mutex dep_lock;
         int task_count;
         int finished_task_count;
