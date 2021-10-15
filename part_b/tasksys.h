@@ -8,6 +8,7 @@
 #include <mutex>
 #include <thread>
 #include <set>
+#include <condition_variable>
 
 /*
  * TaskSystemSerial: This class is the student's implementation of a
@@ -101,9 +102,21 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         std::mutex dep_lock;
         int task_count;
         int finished_task_count;
-        std::vector<std::thread> thread_vec;
+        int workers_ready;
         void task_finished(TaskID tid);
-        void worker();
+        void worker(int workerId);
+        bool allWorkersIdle();
+        int num_total_tasks;
+        int cur_task;
+        bool deconstruct;
+        IRunnable* runnable;
+        std::vector<std::condition_variable_any> wakeThread;
+        std::condition_variable_any checkWorkLeft;
+        std::condition_variable_any readyToStart;
+        std::vector<std::thread> thread_vec;
+        std::vector<bool> idle;
+        std::mutex task_lock;
+        std::mutex idle_lock;
 };
 
 #endif
