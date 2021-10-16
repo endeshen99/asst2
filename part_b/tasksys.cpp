@@ -214,7 +214,7 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
     //cout << workerId << " is done" << endl;
 }
 
-void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_total_tasks) {
+void TaskSystemParallelThreadPoolSleeping::run(IRunnable* run, int total_tasks) {
 
 
     //
@@ -226,6 +226,8 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
     task_lock.lock();
     //cout << "starting with " << total_tasks << endl;
     cur_task = 0;
+    num_total_tasks = total_tasks;
+    runnable = run;
     for (int i =0; i < idle.size(); i++) {
         idle[i] = false;
     }

@@ -104,6 +104,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         int finished_task_count;
         int workers_ready;
         void task_finished(TaskID tid);
+        
         void worker(int workerId);
         bool allWorkersIdle();
         int num_total_tasks;
