@@ -136,7 +136,8 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
                                                                             deconstruct(false),
                                                                             wakeThread(num_threads),
                                                                             task_lock(),
-                                                                            workers_ready(0) {
+                                                                            workers_ready(0),
+                                                                            all_tasks_finished(true) {
     for (int i = 0; i < thread_vec.size(); i++) {
         thread_vec[i] = thread([this, i]() {
             worker(i);
@@ -164,20 +165,31 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
     }
 }
 
-bool TaskSystemParallelThreadPoolSleeping::allWorkersIdle() {
-    for (bool i : idle) {
-        if (!i) {
-            return false;
-        }
-    }
-    return true;
-}
-
 void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
 
-    // TODO: adapt sleeping threads, ask workers to grab work from
-    // and update processing_progress
-    // and invoke task_finished subroutine
+    while (!deconstruct) {
+        unique_lock<mutex> lk(dep_lock);
+
+        // when there's no more work to be done, sleep
+        while (all_tasks_finished) {
+            thread_waiting.wait(lk);
+        }
+        
+        // grab work from processing_progress, update processing_progress
+        // if all works are taken, sleep and wait
+        for (TaskID task: processing_progress) {
+            if (task.second[0] == task.second[1]) continue;
+            TaskID curr_task_id = task.first;
+            
+        }
+        int curr_task = 
+
+
+        // if a task is finished, invoke task_finished subroutine
+
+        lk.unlock();
+        
+
 
     //unique_lock<mutex> ulock(task_lock);
     task_lock.lock();
@@ -217,11 +229,6 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* run, int total_tasks) {
 
 
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Parts A and B.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
 
     task_lock.lock();
     //cout << "starting with " << total_tasks << endl;
@@ -281,9 +288,6 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
                                                     const std::vector<TaskID>& deps) {
 
 
-    //
-    // TODO: CS149 students will implement this method in Part B.
-    //
 
     dep_lock.lock();
     task_count++;
@@ -291,39 +295,34 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
 
     id_to_task[curr_task_id] = {runnable, num_total_tasks};
 
-    // if the task has no dependencies, queue it to processing_progress
-    if (deps.size() == 0) {
-        processing_progress[curr_task_id] = {num_total_tasks, 0, 0};
-
-    } else {
-
-        // TODO: verify that we append an empty vector if there's no deps
-        std::set<TaskID> existing_deps;
+    std::set<TaskID> vavlid_deps;
+    
+    for (const auto& dep_task_id: deps) {
         
-        for (const auto& dep_task_id: deps) {
-            
-            // filter tasks in the dependency list that have already finished
-            if (deps_map.count(dep_task_id)) {
-                existing_deps.insert(dep_task_id);
+        // deps might contain tasks that have already finished, we should ignore these
+        // check deps_map to make sure each task has not finished
+        if (deps_map.count(dep_task_id)) {
+            vavlid_deps.insert(dep_task_id);
 
-                // tell the tasks in the dependency list: this task depends on you.
-                // so that when you are finished, you can notify this task so.
-                //
-                // Two situations:
-                //   1. append to an existing vector 
-                //   2. create a new vector with one element
-                if (deps_map_inverse.count(dep_task_id)) {
-                    deps_map_inverse[dep_task_id].insert(curr_task_id);
-                } else {       // TODO: verify we create a one-element vector here, 
-                    std::set<TaskID> deps_inverse = {curr_task_id};
-                    deps_map_inverse[dep_task_id] = deps_inverse;
-                }
+            // helper data structure for a faster update on deps_map when tasks are finished
+            // otherwise has to iterate through deps_map to delete tasks
+            if (deps_map_inverse.count(dep_task_id)) {
+                deps_map_inverse[dep_task_id].insert(curr_task_id);
+            } else {
+                std::set<TaskID> deps_inverse = {curr_task_id};
+                deps_map_inverse[dep_task_id] = deps_inverse;
             }
         }
-        deps_map[curr_task_id] = existing_deps;
     }
+    deps_map[curr_task_id] = vavlid_deps;
 
+    // if the task has no valid dependencies, queue it to processing_progress
+    if (vavlid_deps.size() == 0) {
+        processing_progress[curr_task_id] = {num_total_tasks, 0, 0};
+
+    all_tasks_finished = false;
     dep_lock.unlock();
+    thread_waiting.notify_all();
     return curr_task_id;
 }
 
@@ -332,6 +331,12 @@ void TaskSystemParallelThreadPoolSleeping::sync() {
     //
     // TODO: CS149 students will modify the implementation of this method in Part B.
     //
+
+    dep_lock.lock();
+    while (deps_map.size() != 0) {
+        checkWorkLeft.wait(dep_lock);
+    }
+    dep_lock.unlock();
 
     return;
 }

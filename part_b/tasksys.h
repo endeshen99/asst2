@@ -104,7 +104,9 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         int finished_task_count;
         int workers_ready;
         void task_finished(TaskID tid);
-        
+        std::condition_variable thread_waiting;
+        bool all_tasks_finished;
+
         void worker(int workerId);
         bool allWorkersIdle();
         int num_total_tasks;
@@ -117,7 +119,6 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         std::vector<std::thread> thread_vec;
         std::vector<bool> idle;
         std::mutex task_lock;
-        std::mutex idle_lock;
 };
 
 #endif
