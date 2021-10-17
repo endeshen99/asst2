@@ -136,8 +136,11 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
                                                                             deconstruct(false),
                                                                             wakeThread(num_threads),
                                                                             task_lock(),
+                                                                            task_count(0),
                                                                             workers_ready(0),
-                                                                            all_tasks_finished(true) {
+                                                                            all_tasks_finished(true),
+                                                                            all_done(true),
+                                                                            startup(false) {
     for (int i = 0; i < thread_vec.size(); i++) {
         thread_vec[i] = thread([this, i]() {
             worker(i);
@@ -165,29 +168,37 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
     }
 }
 
+bool TaskSystemParallelThreadPoolSleeping::allWorkersIdle() {
+    for (bool b : idle) {
+        if (!b) {
+            return false;
+        }
+    }
+    return true;
+}
 void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
 
-    while (!deconstruct) {
-        unique_lock<mutex> lk(dep_lock);
+    // while (!deconstruct) {
+    //     unique_lock<mutex> lk(dep_lock);
 
-        // when there's no more work to be done, sleep
-        while (all_tasks_finished) {
-            thread_waiting.wait(lk);
-        }
+    //     // when there's no more work to be done, sleep
+    //     while (all_tasks_finished) {
+    //         thread_waiting.wait(lk);
+    //     }
         
-        // grab work from processing_progress, update processing_progress
-        // if all works are taken, sleep and wait
-        for (TaskID task: processing_progress) {
-            if (task.second[0] == task.second[1]) continue;
-            TaskID curr_task_id = task.first;
+    //     // grab work from processing_progress, update processing_progress
+    //     // if all works are taken, sleep and wait
+    //     for (TaskID task: processing_progress) {
+    //         if (task.second[0] == task.second[1]) continue;
+    //         TaskID curr_task_id = task.first;
             
-        }
-        int curr_task = 
+    //     }
+    //     int curr_task = 
 
 
-        // if a task is finished, invoke task_finished subroutine
+    //     // if a task is finished, invoke task_finished subroutine
 
-        lk.unlock();
+    //     lk.unlock();
         
 
 
@@ -202,11 +213,14 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
     while (!deconstruct) {
         task_lock.lock();
         if (cur_task == num_total_tasks) {
+            // cout << "worker is idle" << endl;
             idle[workerId] = true;
-            //cout << "notify main thread done" << endl;
-            checkWorkLeft.notify_all();
+            if (!all_done && allWorkersIdle()) {
+                task_finished(cur_tid);
+            } else {
+                wakeThread[workerId].wait(task_lock);
+            }
             //cout << workerId << " is sleeping" << endl;
-            wakeThread[workerId].wait(task_lock);
             task_lock.unlock();
             if (deconstruct) {
                 break;
@@ -227,39 +241,43 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
 }
 
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* run, int total_tasks) {
+    const vector<TaskID> no_deps{};
+    runAsyncWithDeps(run, total_tasks,no_deps);
+    sync();
+}
 
 
-
-    task_lock.lock();
-    //cout << "starting with " << total_tasks << endl;
+void TaskSystemParallelThreadPoolSleeping::addRunnable(IRunnable* run, int total_tasks) {
+    cout << "starting with " << total_tasks << endl;
     cur_task = 0;
     num_total_tasks = total_tasks;
     runnable = run;
     for (int i =0; i < idle.size(); i++) {
         idle[i] = false;
     }
-    
     while (workers_ready != thread_vec.size()) {
         readyToStart.wait(task_lock);
     }
-    task_lock.unlock();
     for (auto& cv : wakeThread) {
         cv.notify_all();
     }
-    task_lock.lock();
-    while (!allWorkersIdle()) {
-        //cout << "main thread checking workd"<<endl;
-        checkWorkLeft.wait(task_lock);
-    }
-    //cout << "main thread sees no more owrk"<<endl;
-    task_lock.unlock();
-    //cout << " run done" << endl;
 }
+
+    // task_lock.lock();
+    // while (!allWorkersIdle()) {
+    //     //cout << "main thread checking workd"<<endl;
+    //     checkWorkLeft.wait(task_lock);
+    // }
+    // //cout << "main thread sees no more owrk"<<endl;
+    // task_lock.unlock();
+    // //cout << " run done" << endl;
 
 void TaskSystemParallelThreadPoolSleeping::task_finished(TaskID tid) {
     // when a task is finished, no tasks are dependent on it anymore
     // delete its record from deps_map, and delete its value from deps_map.values()
     // delete its record from deps_map_inverse
+
+    cout << "task_finished called by" << tid << endl;
 
     dep_lock.lock();
     deps_map.erase(tid);
@@ -281,7 +299,28 @@ void TaskSystemParallelThreadPoolSleeping::task_finished(TaskID tid) {
     // remove the finished task's runnable from our map
     id_to_task.erase(tid);
 
+    if (processing_progress.size() != 0) {
+        // cout << "there are tasks to be processed" << endl;
+        for (auto curr_task: processing_progress) {
+            TaskID id = curr_task.first;
+            array<int, 3> task = curr_task.second;
+            if (task[1] == 0) {
+                // cout << "found another task to do" << endl;
+                cur_tid = id;
+                // cout << "starting " << cur_tid<<endl;
+                addRunnable(id_to_task[id].first, id_to_task[id].second);
+                break;
+            }
+        }
+    } else {
+        all_done = true;
+    }
+    
+    
     dep_lock.unlock();
+    if (deps_map.size() == 0) {
+        checkWorkLeft.notify_all();
+    }
 }
 
 TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -295,14 +334,14 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
 
     id_to_task[curr_task_id] = {runnable, num_total_tasks};
 
-    std::set<TaskID> vavlid_deps;
+    std::set<TaskID> valid_deps;
     
     for (const auto& dep_task_id: deps) {
         
         // deps might contain tasks that have already finished, we should ignore these
         // check deps_map to make sure each task has not finished
         if (deps_map.count(dep_task_id)) {
-            vavlid_deps.insert(dep_task_id);
+            valid_deps.insert(dep_task_id);
 
             // helper data structure for a faster update on deps_map when tasks are finished
             // otherwise has to iterate through deps_map to delete tasks
@@ -314,15 +353,21 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
             }
         }
     }
-    deps_map[curr_task_id] = vavlid_deps;
+    deps_map[curr_task_id] = valid_deps;
 
     // if the task has no valid dependencies, queue it to processing_progress
-    if (vavlid_deps.size() == 0) {
+    if (valid_deps.size() == 0) {
         processing_progress[curr_task_id] = {num_total_tasks, 0, 0};
-
-    all_tasks_finished = false;
+    }
+    all_done = false;
+    // thread_waiting.notify_all();
+    if (allWorkersIdle()) {
+        cur_tid = curr_task_id;
+        cout << "starting " << cur_tid<<endl;
+        addRunnable(runnable, num_total_tasks);
+    }
     dep_lock.unlock();
-    thread_waiting.notify_all();
+    
     return curr_task_id;
 }
 
