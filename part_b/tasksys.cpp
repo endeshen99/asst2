@@ -205,9 +205,7 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
     //unique_lock<mutex> ulock(task_lock);
     task_lock.lock();
     workers_ready++;
-    if (workers_ready = thread_vec.size()) {
-        readyToStart.notify_all();
-    }
+    readyToStart.notify_all();
     cout << workerId << " is about to start " << endl;
     wakeThread[workerId].wait(task_lock);
     task_lock.unlock();
@@ -367,13 +365,13 @@ TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnabl
         processing_progress[curr_task_id] = {num_total_tasks, 0, 0};
     }
     all_done = false;
-    dep_lock.unlock();
     // thread_waiting.notify_all();
     if (allWorkersIdle()) {
         cur_tid = curr_task_id;
         cout << "starting " << cur_tid<<endl;
         addRunnable(runnable, num_total_tasks);
     }
+    dep_lock.unlock();
     
     return curr_task_id;
 }
