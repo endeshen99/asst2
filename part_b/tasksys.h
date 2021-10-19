@@ -91,6 +91,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
                                 const std::vector<TaskID>& deps);
         void sync();
     private:
+        // std::pair is a pair of runnable and num_total_tasks
         std::map<TaskID, std::pair<IRunnable*, int>> id_to_task;
         std::map<TaskID, std::set<TaskID>> deps_map;
         std::map<TaskID, std::set<TaskID>> deps_map_inverse;
@@ -104,20 +105,26 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         int finished_task_count;
         int workers_ready;
         void task_finished(TaskID tid);
-        
+        std::condition_variable thread_waiting;
+        bool all_tasks_finished;
+
         void worker(int workerId);
         bool allWorkersIdle();
         int num_total_tasks;
         int cur_task;
+        TaskID cur_tid;
         bool deconstruct;
         IRunnable* runnable;
+        bool startup;
         std::vector<std::condition_variable_any> wakeThread;
         std::condition_variable_any checkWorkLeft;
         std::condition_variable_any readyToStart;
         std::vector<std::thread> thread_vec;
         std::vector<bool> idle;
         std::mutex task_lock;
-        std::mutex idle_lock;
+
+        void addRunnable(IRunnable* run, int total_tasks);
+        bool all_done;
 };
 
 #endif
