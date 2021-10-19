@@ -98,7 +98,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         std::vector<bool> idle;
         std::mutex task_lock;
         std::mutex idle_lock;
-
+        bool ready_to_start;
 };
 
 #endif
