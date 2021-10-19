@@ -92,13 +92,15 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         int cur_task;
         bool deconstruct;
         IRunnable* runnable;
+        int workers_ready;
         std::vector<std::condition_variable_any> wakeThread;
         std::condition_variable_any checkWorkLeft;
+        std::condition_variable_any readyToStart;
         std::vector<std::thread> thread_vec;
         std::vector<bool> idle;
         std::mutex task_lock;
         std::mutex idle_lock;
-        bool ready_to_start;
+
 };
 
 #endif

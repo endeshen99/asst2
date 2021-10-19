@@ -211,10 +211,12 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
 void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
     //unique_lock<mutex> ulock(task_lock);
     task_lock.lock();
-    // cout << workerId << " is ready " << endl;
-    while (!ready_to_start) {
-        wakeThread[workerId].wait(task_lock);
+    //cout << workerId << " is about to start " << endl;
+    workers_ready++;
+    if (workers_ready == thread_vec.size()) {
+        readyToStart.notify_all();
     }
+    wakeThread[workerId].wait(task_lock);
     task_lock.unlock();
     //cout << workerId << " is starting " << endl;
     while (!deconstruct) {
@@ -222,7 +224,9 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
         if (cur_task == num_total_tasks) {
             idle[workerId] = true;
             //cout << "notify main thread done" << endl;
-            checkWorkLeft.notify_all();
+            if (allWorkersIdle()) {
+                checkWorkLeft.notify_all();
+            }
             //cout << workerId << " is sleeping" << endl;
             wakeThread[workerId].wait(task_lock);
             task_lock.unlock();
@@ -244,7 +248,7 @@ void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
     //cout << workerId << " is done" << endl;
 }
 
-TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads), thread_vec(num_threads), cur_task(0), num_total_tasks(0), idle(num_threads, true), deconstruct(false), wakeThread(num_threads), task_lock(), ready_to_start(false) {
+TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads), thread_vec(num_threads), cur_task(0), num_total_tasks(0), idle(num_threads, true), deconstruct(false), wakeThread(num_threads), task_lock(), workers_ready(0) {
     for (int i = 0; i < thread_vec.size(); i++) {
         thread_vec[i] = thread([this, i]() {
             worker(i);
@@ -254,7 +258,7 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
 
 TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
 
-    cout << "deconstructing" << endl;
+    //cout << "deconstructing" << endl;
     task_lock.lock();
     while (!allWorkersIdle()) {
         checkWorkLeft.wait(task_lock);
@@ -288,11 +292,13 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* run, int total_tasks) 
     cur_task = 0;
     num_total_tasks = total_tasks;
     runnable = run;
-    ready_to_start = true;
     for (int i =0; i < idle.size(); i++) {
         idle[i] = false;
     }
     
+    while (workers_ready != thread_vec.size()) {
+        readyToStart.wait(task_lock);
+    }
     task_lock.unlock();
     for (auto& cv : wakeThread) {
         cv.notify_all();
