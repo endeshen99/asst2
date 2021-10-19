@@ -208,36 +208,103 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
     return "Parallel + Thread Pool + Sleep";
 }
 
-TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads) {
-    //
-    // TODO: CS149 student implementations may decide to perform setup
-    // operations (such as thread pool construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
+void TaskSystemParallelThreadPoolSleeping::worker(int workerId){
+    //unique_lock<mutex> ulock(task_lock);
+    task_lock.lock();
+    // cout << workerId << " is ready " << endl;
+    while (!ready_to_start) {
+        wakeThread[workerId].wait(task_lock);
+    }
+    task_lock.unlock();
+    //cout << workerId << " is starting " << endl;
+    while (!deconstruct) {
+        task_lock.lock();
+        if (cur_task == num_total_tasks) {
+            idle[workerId] = true;
+            //cout << "notify main thread done" << endl;
+            checkWorkLeft.notify_all();
+            //cout << workerId << " is sleeping" << endl;
+            wakeThread[workerId].wait(task_lock);
+            task_lock.unlock();
+            if (deconstruct) {
+                break;
+            }
+            continue;
+        }
+
+        int my_task = cur_task;
+        //cout << workerId << " is running job " << my_task << endl;
+        int my_total_tasks = num_total_tasks;
+        cur_task++;
+        task_lock.unlock();
+
+        runnable->runTask(my_task, my_total_tasks);
+
+    }
+    //cout << workerId << " is done" << endl;
+}
+
+TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads), thread_vec(num_threads), cur_task(0), num_total_tasks(0), idle(num_threads, true), deconstruct(false), wakeThread(num_threads), task_lock(), ready_to_start(false) {
+    for (int i = 0; i < thread_vec.size(); i++) {
+        thread_vec[i] = thread([this, i]() {
+            worker(i);
+        });
+    }
 }
 
 TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
-    //
-    // TODO: CS149 student implementations may decide to perform cleanup
-    // operations (such as thread pool shutdown construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
+
+    cout << "deconstructing" << endl;
+    task_lock.lock();
+    while (!allWorkersIdle()) {
+        checkWorkLeft.wait(task_lock);
+    }
+    task_lock.unlock();
+
+    deconstruct = true;
+    //cout << "notify threads" << endl;
+    for (auto& cv : wakeThread) {
+        cv.notify_all();
+    }
+//wakeAllThreads.notify_all();
+    for (thread& t : thread_vec) {
+        t.join();
+    }
+
+}
+bool TaskSystemParallelThreadPoolSleeping::allWorkersIdle() {
+    for (bool i : idle) {
+        if (!i) {
+            return false;
+        }
+    }
+    return true;
 }
 
-void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_total_tasks) {
+void TaskSystemParallelThreadPoolSleeping::run(IRunnable* run, int total_tasks) {
 
-
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Parts A and B.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
-
-    for (int i = 0; i < num_total_tasks; i++) {
-        runnable->runTask(i, num_total_tasks);
+    task_lock.lock();
+    //cout << "starting with " << total_tasks << endl;
+    cur_task = 0;
+    num_total_tasks = total_tasks;
+    runnable = run;
+    ready_to_start = true;
+    for (int i =0; i < idle.size(); i++) {
+        idle[i] = false;
     }
+    
+    task_lock.unlock();
+    for (auto& cv : wakeThread) {
+        cv.notify_all();
+    }
+    task_lock.lock();
+    while (!allWorkersIdle()) {
+        //cout << "main thread checking workd"<<endl;
+        checkWorkLeft.wait(task_lock);
+    }
+    //cout << "main thread sees no more owrk"<<endl;
+    task_lock.unlock();
+    //cout << " run done" << endl;
 }
 
 TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
