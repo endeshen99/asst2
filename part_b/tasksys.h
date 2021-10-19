@@ -102,11 +102,8 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         std::map<TaskID, std::array<int, 3>> processing_progress;
         std::mutex dep_lock;
         int task_count;
-        int finished_task_count;
-        int workers_ready;
         void task_finished(TaskID tid);
         std::condition_variable thread_waiting;
-        bool all_tasks_finished;
 
         void worker(int workerId);
         bool allWorkersIdle();
@@ -115,7 +112,6 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         TaskID cur_tid;
         bool deconstruct;
         IRunnable* runnable;
-        bool startup;
         std::vector<std::condition_variable_any> wakeThread;
         std::condition_variable_any checkWorkLeft;
         std::condition_variable_any readyToStart;
@@ -125,6 +121,7 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
 
         void addRunnable(IRunnable* run, int total_tasks);
         bool all_done;
+        bool ready_to_start;
 };
 
 #endif
